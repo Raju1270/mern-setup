@@ -1,0 +1,57 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "API Server",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env dist/index.js",
+    "dev": "nodemon",
+    "build": "tsc",
+    "clean": "if exist dist rmdir /s /q dist",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint . --write",
+    "format": "biome format . --write",
+    "format:check": "biome format .",
+    "check": "biome check .",
+    "check:fix": "biome check . --write",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "express",
+    "mongodb",
+    "mongoose",
+    "rest-api",
+    "nodejs"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.17.1",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^9.0.0",
+    "morgan": "^1.10.1",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.10.1",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

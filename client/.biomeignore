@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Generated files
+*.min.js
+*.min.css
+
+# Package manager files
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Config files that might have different formatting requirements
+tailwind.config.*
+postcss.config.*
+
+# CSS files with Tailwind directives
+src/index.css
+index.css
+
+# Other
+coverage/
+.nyc_output/

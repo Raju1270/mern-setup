@@ -1,0 +1,6 @@
+{
+  "watch": ["**/*.ts", ".env"],
+  "ext": "ts",
+  "ignore": ["node_modules", "dist"],
+  "exec": "tsx --env-file=.env index.ts"
+}
