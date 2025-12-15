@@ -36,3 +36,6 @@ index.css
 # Other
 coverage/
 .nyc_output/
+
+
+src/components/ui/*.tsx

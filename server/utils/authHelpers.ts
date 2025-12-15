@@ -1,9 +1,14 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-export const generateToken = (userId: string): string => {
+export const generateToken = (userId: string, role?: string): string => {
+  const payload: { userId: string; role?: string } = { userId };
+  if (role) {
+    payload.role = role;
+  }
+
   return jwt.sign(
-    { userId },
+    payload,
     process.env.JWT_SECRET as jwt.Secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" } as jwt.SignOptions
   );

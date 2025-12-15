@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/AuthStore'
 
@@ -6,10 +7,9 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, isAuthenticated, checkAuth } = useAuthStore()
   const location = useLocation()
 
-  // CHECK AUTH STATUS.
-  if (!checkAuth()) {
-    return <Navigate to='/login' state={{ from: location }} replace />
-  }
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
 
   // PUBLIC ROUTE - ALLOW ALL.
   if (allowedRoles.includes('Public')) {

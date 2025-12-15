@@ -5,6 +5,17 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: string;
+  otp?: string;
+  otpExpiry?: Date;
+  otpAttempts: number;
+  mfaEnabled: boolean;
+  mfaOtp?: string;
+  mfaOtpExpiry?: Date;
+  mfaAttempts: number;
+  active: boolean;
+  profilePhoto?: string;
+  lastLogin?: Date;
+  loginIp?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +46,52 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ["user", "admin"],
       default: "user",
+    },
+    otp: {
+      type: String,
+      select: false,
+    },
+    otpExpiry: {
+      type: Date,
+      select: false,
+    },
+    otpAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    mfaEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    mfaOtp: {
+      type: String,
+      select: false,
+    },
+    mfaOtpExpiry: {
+      type: Date,
+      select: false,
+    },
+    mfaAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
+    profilePhoto: {
+      type: String,
+      default: null,
+    },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+    loginIp: {
+      type: String,
+      default: null,
     },
   },
   {
