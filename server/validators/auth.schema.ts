@@ -2,21 +2,21 @@ import { z } from "zod";
 
 export const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(50).trim(),
-  email: z.email("Invalid email format").toLowerCase().trim(),
+  email: z.string().email("Invalid email format").toLowerCase().trim(),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
 });
 
 export const loginSchema = z.object({
-  email: z.email("Invalid email format").toLowerCase().trim(),
+  email: z.string().email("Invalid email format").toLowerCase().trim(),
   password: z.string().min(1, "Password is required"),
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.email("Invalid email format").toLowerCase().trim(),
+  email: z.string().email("Invalid email format").toLowerCase().trim(),
 });
 
 export const verifyOTPSchema = z.object({
-  email: z.email("Invalid email format").toLowerCase().trim(),
+  email: z.string().email("Invalid email format").toLowerCase().trim(),
   otp: z
     .string()
     .length(6, "OTP must be 6 digits")
@@ -24,13 +24,13 @@ export const verifyOTPSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({
-  email: z.email("Invalid email format").toLowerCase().trim(),
+  email: z.string().email("Invalid email format").toLowerCase().trim(),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
 });
 
 export const verifyMFASchema = z.object({
   userId: z.string().optional(),
-  email: z.email("Invalid email format").toLowerCase().trim().optional(),
+  email: z.string().email("Invalid email format").toLowerCase().trim().optional(),
   otp: z
     .string()
     .length(6, "OTP must be 6 digits")

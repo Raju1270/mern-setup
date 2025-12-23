@@ -1,20 +1,72 @@
 import nodemailer from "nodemailer";
+import type { IUser } from "../models/user.model.js";
+import { AppError } from "./AppError.js";
+import { getEmailTransporter } from "../config/emailConfig.js";
 
-export const generateOTP = (): string => {
+const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Create reusable transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+const getOtpExpiry = () => {
+  const minutes = Number.parseInt(process.env.OTP_EXPIRY_MINUTES || "5");
+  return new Date(Date.now() + minutes * 60 * 1000);
+};
+
+const getMaxAttempts = () => Number.parseInt(process.env.OTP_MAX_ATTEMPTS || "5");
+
+export const createOtpData = () => ({
+  otp: generateOTP(),
+  otpExpiry: getOtpExpiry(),
+  maxAttempts: getMaxAttempts(),
+});
+
+export const clearOtp = (user: IUser) => {
+  user.otp = undefined;
+  user.otpExpiry = undefined;
+  user.otpAttempts = 0;
+};
+
+export const clearMfaOtp = (user: IUser) => {
+  user.mfaOtp = undefined;
+  user.mfaOtpExpiry = undefined;
+  user.mfaAttempts = 0;
+};
+
+export const validateOtp = async (
+  user: IUser,
+  otp: string,
+  otpField: "otp" | "mfaOtp",
+  expiryField: "otpExpiry" | "mfaOtpExpiry",
+  attemptsField: "otpAttempts" | "mfaAttempts",
+  onMaxAttempts: () => Promise<void>
+) => {
+  if (!user[otpField] || !user[expiryField]) {
+    throw new AppError("OTP not found. Please request a new one.", 400);
+  }
+
+  if (user[expiryField]! < new Date()) {
+    if (otpField === "otp") clearOtp(user);
+    else clearMfaOtp(user);
+    await user.save();
+    throw new AppError("OTP has expired. Please request a new one.", 400);
+  }
+
+  if (user[otpField] !== otp) {
+    user[attemptsField] = (user[attemptsField] || 0) + 1;
+    const remaining = createOtpData().maxAttempts - user[attemptsField];
+
+    if (remaining <= 0) {
+      await onMaxAttempts();
+    }
+
+    await user.save();
+    throw new AppError(
+      `Invalid OTP. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`,
+      400
+    );
+  }
+
+  user[attemptsField] = 0;
 };
 
 export const sendOTPEmail = async (
@@ -22,28 +74,41 @@ export const sendOTPEmail = async (
   otp: string,
   subject = "OTP Verification"
 ): Promise<void> => {
-  try {
-    const transporter = createTransporter();
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-    const htmlContent = HtmlOtpTemplate
-      .replace("{{.Otp}}", otp)
-      .replace("{{.FullName}}", email.split("@")[0]);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const transporter = getEmailTransporter();
 
-    const mailOptions = {
-      from: `"${process.env.SMTP_FROM_NAME || "Demo Application"}" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: subject,
-      html: htmlContent,
-    };
+      const htmlContent = HtmlOtpTemplate.replace("{{.Otp}}", otp).replace(
+        "{{.FullName}}",
+        email.split("@")[0]
+      );
 
-    await transporter.sendMail(mailOptions);
-  
-  } catch (error) {
-  
-    throw new Error("Failed to send OTP email");
+      const mailOptions = {
+        from: `"${process.env.SMTP_FROM_NAME || "Demo Application"}" <${process.env.SMTP_USER}>`,
+        to: email,
+        subject: subject,
+        html: htmlContent,
+      };
+
+      await transporter.sendMail(mailOptions);
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`Failed to send OTP email (attempt ${attempt}/${maxRetries}):`, error);
+
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
   }
-};
 
+  // All retries failed
+  console.error("Failed to send OTP email after all retries:", lastError);
+  throw new AppError("Failed to send OTP email. Please try again later.", 500);
+};
 
 const HtmlOtpTemplate = `
 <!DOCTYPE html>
@@ -103,4 +168,4 @@ const HtmlOtpTemplate = `
     </table>
   </body>
 </html>
-`
+`;

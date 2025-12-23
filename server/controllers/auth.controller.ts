@@ -2,36 +2,56 @@ import type { NextFunction, Response } from "express";
 import type { AuthRequest } from "../middlewares/auth.js";
 import {
   deactivateAccount,
-  disableMFA,
-  enableMFA,
   getUserProfile,
   loginUser,
   resetUserPassword,
   sendMFACode,
   sendPasswordResetOTP,
   signupUser,
+  toggleMFARequest,
   updateUserProfile,
   verifyMFACode,
-  verifyMFASetup,
+  verifyMFAToggle,
+  verifySignupOTP,
   verifyUserOTP,
 } from "../services/auth.service.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { comparePassword, generateToken } from "../utils/authHelpers.js";
+import { comparePassword, generateToken, getClientIp } from "../utils/authHelpers.js";
 
 export const signup = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const { name, email, password } = req.body;
 
-    // CREATE USER.
     const userData = await signupUser(name, email, password);
-
-    const accessToken = generateToken(userData.userId.toString(), userData.role);
 
     res.status(201).json({
       success: true,
+      userId: userData.userId,
+      email: userData.email,
+      message: "OTP sent to your email. Please verify to complete registration.",
+    });
+  }
+);
+
+export const verifySignup = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    const { email, otp } = req.body;
+
+    // VERIFY OTP AND ACTIVATE ACCOUNT.
+    const userData = await verifySignupOTP(email, otp);
+
+    const accessToken = generateToken(userData.userId.toString(), userData.role);
+
+    res.json({
+      success: true,
       accessToken,
-      ...userData,
+      userId: userData.userId,
+      userName: userData.userName,
+      email: userData.email,
+      role: userData.role,
+      profilePhoto: null,
+      mfaEnabled: false,
     });
   }
 );
@@ -41,9 +61,15 @@ export const login = asyncHandler(
     const { email, password } = req.body;
 
     // FIND USER.
+
     const user = await loginUser(email);
+
     if (!user) {
-      return next(new AppError("Invalid email or password", 401));
+      return next(new AppError("No user found ", 401));
+    }
+
+    if (!user.emailVerified) {
+      return next(new AppError("Please verify your email before logging in.", 403));
     }
 
     if (!user.active) {
@@ -72,7 +98,7 @@ export const login = asyncHandler(
 
     // UPDATE LOGIN TRACKING.
     user.lastLogin = new Date();
-    user.loginIp = req.ip || req.socket.remoteAddress || "unknown";
+    user.loginIp = getClientIp(req);
     await user.save();
 
     const accessToken = generateToken(user._id.toString(), user.role);
@@ -84,6 +110,7 @@ export const login = asyncHandler(
       userName: user.name,
       email: user.email,
       role: user.role,
+      profilePhoto: user.profilePhoto,
       mfaEnabled: user.mfaEnabled,
     });
   }
@@ -129,20 +156,20 @@ export const resetPassword = asyncHandler(
 );
 
 // MFA CONTROLLERS
-export const enableMFAController = asyncHandler(
+export const toggleMFAController = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const userId = req.user?.userId;
     if (!userId) {
       return next(new AppError("User not authenticated", 401));
     }
 
-    const result = await enableMFA(userId);
+    const result = await toggleMFARequest(userId);
 
     res.json(result);
   }
 );
 
-export const verifyMFASetupController = asyncHandler(
+export const verifyMFAToggleController = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const userId = req.user?.userId;
     const { otp } = req.body;
@@ -151,20 +178,7 @@ export const verifyMFASetupController = asyncHandler(
       return next(new AppError("User not authenticated", 401));
     }
 
-    const result = await verifyMFASetup(userId, otp);
-
-    res.json(result);
-  }
-);
-
-export const disableMFAController = asyncHandler(
-  async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    const userId = req.user?.userId;
-    if (!userId) {
-      return next(new AppError("User not authenticated", 401));
-    }
-
-    const result = await disableMFA(userId);
+    const result = await verifyMFAToggle(userId, otp);
 
     res.json(result);
   }
@@ -176,6 +190,9 @@ export const verifyMFALogin = asyncHandler(
 
     const result = await verifyMFACode(userId, email, otp);
 
+    result.user.loginIp = getClientIp(req);
+    await result.user.save();
+
     const accessToken = generateToken(result.user._id.toString(), result.user.role);
 
     res.json({
@@ -185,6 +202,7 @@ export const verifyMFALogin = asyncHandler(
       userName: result.user.name,
       email: result.user.email,
       role: result.user.role,
+      profilePhoto: result.user.profilePhoto,
       mfaEnabled: result.user.mfaEnabled,
     });
   }

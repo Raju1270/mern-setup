@@ -25,14 +25,9 @@ const Login = () => {
   const from = location.state?.from?.pathname || '/dashboard'
 
   const [step, setStep] = useState(STEPS.LOGIN)
-  const [mfaData, setMfaData] = useState < MFAData | null > (null)
+  const [mfaData, setMfaData] = useState(null)
 
-  const {
-    canResend,
-    reset: resetTimer,
-    start,
-    timeLeft,
-  } = useOtpTimer(5 * 60) // 5 minutes
+  const { canResend, reset: resetTimer, start, timeLeft } = useOtpTimer()
 
   const {
     register,
@@ -58,18 +53,13 @@ const Login = () => {
       } else {
         navigate(from, { replace: true })
       }
-    }
+    },
   })
 
   const { mutate: verifyMFA, isPending: isVerifyingMFA } = useMutation({
     mutationFn: VerifyMFALoginService,
-
     onSuccess: () => {
       navigate(from, { replace: true })
-    },
-
-    onError: (error) => {
-      showError(parseError(error))
     },
   })
 
@@ -93,9 +83,7 @@ const Login = () => {
     setMfaData(null)
   }
 
-  const maskedEmail = mfaData?.email
-    ? mfaData.email.replace(/(.{2}).+(@.+)/, '$1***$2')
-    : ''
+  const maskedEmail = mfaData?.email ? mfaData.email.replace(/(.{2}).+(@.+)/, '$1***$2') : ''
 
   return (
     <Card className='w-full'>
@@ -126,7 +114,9 @@ const Login = () => {
                   disabled={isLoggingIn}
                   autoComplete='off'
                 />
-                {errors.email && <p className='mt-1 text-sm text-red-500'>{errors.email.message}</p>}
+                {errors.email && (
+                  <p className='mt-1 text-sm text-red-500'>{errors.email.message}</p>
+                )}
               </div>
 
               <div className='grid gap-2'>
@@ -178,7 +168,6 @@ const Login = () => {
           <form onSubmit={handleSubmit(onMFASubmit)} autoComplete='off'>
             <div className='flex flex-col gap-5'>
               <div className='grid gap-2'>
-
                 <InputOTP
                   maxLength={6}
                   disabled={isVerifyingMFA}

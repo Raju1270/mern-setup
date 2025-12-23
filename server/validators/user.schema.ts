@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const createUserSchema = z.object({
   name: z.string().min(2).max(50).trim(),
-  email: z.email().toLowerCase().trim(),
+  email: z.string().email("Invalid email").toLowerCase().trim(),
   password: z
     .string()
     .min(8)
@@ -14,7 +14,7 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z
   .object({
     name: z.string().min(2).max(50).trim().optional(),
-    email: z.email().toLowerCase().trim().optional(),
+    email: z.string().email("Invalid email").toLowerCase().trim().optional(),
     age: z.number().int().min(13).max(120).optional(),
   })
   .strict();

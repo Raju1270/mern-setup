@@ -3,20 +3,10 @@ import { Mail } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,6 +15,7 @@ import { GetProfileService, UpdateProfileService } from '@/services/authServices
 import { parseError } from '@/utils/parseError'
 import { showError } from '@/utils/toast'
 import { getInitials } from '@/utils/utils'
+import { formatDateForUI } from '@/utils/format'
 
 const Profile = () => {
   const [isEditing, setIsEditing] = useState(false)
@@ -38,7 +29,11 @@ const Profile = () => {
   } = useForm()
 
   // FETCH PROFILE.
-  const { data: profile, isLoading, refetch } = useQuery({
+  const {
+    data: profile,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ['profile'],
     queryFn: GetProfileService,
   })
@@ -50,7 +45,6 @@ const Profile = () => {
       setIsEditing(false)
       refetch()
     },
-    onError: (err) => showError(parseError(err)),
   })
 
   // SUBMIT HANDLER.
@@ -88,11 +82,10 @@ const Profile = () => {
   if (!profile) return null
 
   return (
-    <div className='mx-auto max-w-3xl p-6 space-y-8'>
-      {/* HEADER */}
+    <div className='p-6 space-y-8'>
       <div className='flex items-center justify-between'>
         <h1 className='text-2xl font-semibold'>Profile</h1>
-        <Badge variant={profile.active ? 'secondary' : 'destructive'}>
+        <Badge variant={profile.active ? 'default' : 'destructive'} className='p-2 '>
           {profile.active ? 'Active' : 'Inactive'}
         </Badge>
       </div>
@@ -107,15 +100,11 @@ const Profile = () => {
               </Button>
             )}
           </div>
-          <CardDescription>
-            Basic account and profile details.
-          </CardDescription>
         </CardHeader>
 
         <CardContent>
           {!isEditing ? (
             <div className='space-y-8'>
-              {/* PROFILE HEADER */}
               <div className='flex items-center gap-5'>
                 <Avatar className='h-20 w-20'>
                   <AvatarImage src={profile.profilePhoto} />
@@ -125,9 +114,7 @@ const Profile = () => {
                 </Avatar>
 
                 <div className='space-y-1'>
-                  <p className='text-lg font-medium'>
-                    {profile.userName}
-                  </p>
+                  <p className='text-lg font-medium'>{profile.userName}</p>
 
                   <div className='flex items-center gap-2 text-sm text-muted-foreground'>
                     <Mail className='h-4 w-4' />
@@ -140,28 +127,24 @@ const Profile = () => {
 
               {/* META GRID */}
               <div className='grid gap-4 text-sm md:grid-cols-2'>
-                <div>
-                  <p className='text-muted-foreground'>User ID</p>
+                <div className='flex gap-2 items-center'>
+                  <p className='text-muted-foreground'>User ID:</p>
                   <p className='font-mono'>{profile.userId}</p>
                 </div>
 
-                <div>
-                  <p className='text-muted-foreground'>Last Login</p>
-                  <p>
-                    {profile.lastLogin
-                      ? new Date(profile.lastLogin).toLocaleString()
-                      : 'Never'}
-                  </p>
+                <div className='flex gap-2 items-center'>
+                  <p className='text-muted-foreground'>Last Login:</p>
+                  <p>{profile.lastLogin ? formatDateForUI(profile.lastLogin) : 'Never'}</p>
                 </div>
 
-                <div>
-                  <p className='text-muted-foreground'>Created</p>
-                  <p>{new Date(profile.createdAt).toLocaleString()}</p>
-                </div>
-
-                <div>
-                  <p className='text-muted-foreground'>Status</p>
+                <div className='flex gap-2 items-center'>
+                  <p className='text-muted-foreground'>Status:</p>
                   <p>{profile.active ? 'Active' : 'Deactivated'}</p>
+                </div>
+
+                <div className='flex gap-2 items-center'>
+                  <p className='text-muted-foreground'>Created:</p>
+                  <p>{formatDateForUI(profile.createdAt)}</p>
                 </div>
               </div>
             </div>
@@ -177,11 +160,7 @@ const Profile = () => {
                     minLength: { value: 2, message: 'Min 2 characters' },
                   })}
                 />
-                {errors.name && (
-                  <p className='mt-1 text-sm text-red-500'>
-                    {errors.name.message}
-                  </p>
-                )}
+                {errors.name && <p className='mt-1 text-sm text-red-500'>{errors.name.message}</p>}
               </div>
 
               <div>

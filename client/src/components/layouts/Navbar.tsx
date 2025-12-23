@@ -24,9 +24,8 @@ const Navbar = () => {
     navigate('/login', { replace: true })
   }
 
-
   return (
-    <header className='flex items-center justify-between border-b bg-white px-4 py-2'>
+    <header className='flex items-center justify-between border-b px-4 py-2'>
       <SidebarTrigger className='cursor-pointer p-2'>
         <Menu className='h-6 w-6' />
       </SidebarTrigger>
@@ -36,7 +35,9 @@ const Navbar = () => {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Avatar className='h-8 w-8 cursor-pointer'>
-            <AvatarImage src={user?.profilePhoto ? user.profilePhoto : 'https://github.com/shadcn.png'} />
+            <AvatarImage
+              src={user?.profilePhoto ? user.profilePhoto : 'https://github.com/shadcn.png'}
+            />
             <AvatarFallback>
               {user?.userName ? getInitials(user.userName) : <User className='h-4 w-4' />}
             </AvatarFallback>
@@ -50,7 +51,9 @@ const Navbar = () => {
         >
           <div className='flex items-center gap-3 px-3 py-1.5'>
             <Avatar className='h-8 w-8'>
-              <AvatarImage src={user?.profilePhoto ? user.profilePhoto : 'https://github.com/shadcn.png'} />
+              <AvatarImage
+                src={user?.profilePhoto ? user.profilePhoto : 'https://github.com/shadcn.png'}
+              />
               <AvatarFallback>
                 {user?.userName ? getInitials(user.userName) : <User className='h-5 w-5' />}
               </AvatarFallback>

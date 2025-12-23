@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState } from 'react'
 
-export const useOtpTimer = (initialSeconds = 120) => {
+export const useOtpTimer = (initialSeconds = 300) => {
   const [timeLeft, setTimeLeft] = useState(0)
 
   useEffect(() => {

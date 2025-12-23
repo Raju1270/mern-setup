@@ -23,14 +23,8 @@ const STEPS = {
   PASSWORD: 'PASSWORD',
 }
 
-
 const ForgetPassword = () => {
-  const {
-    canResend,
-    reset: resetTimer,
-    start,
-    timeLeft,
-  } = useOtpTimer(5 * 60)
+  const { canResend, reset: resetTimer, start, timeLeft } = useOtpTimer()
 
   const navigate = useNavigate()
   const [step, setStep] = useState(STEPS.EMAIL)
@@ -45,7 +39,6 @@ const ForgetPassword = () => {
     setValue,
   } = useForm()
 
-
   // Send OTP mutation
   const { mutate: sendOTP, isPending: isSendingOTP } = useMutation({
     mutationFn: ForgetPasswordService,
@@ -54,7 +47,6 @@ const ForgetPassword = () => {
       start()
       resetForm()
     },
-    onError: (error) => showError(parseError(error))
   })
 
   // Verify OTP mutation
@@ -64,7 +56,6 @@ const ForgetPassword = () => {
       setStep(STEPS.PASSWORD)
       resetForm()
     },
-    onError: (error) => showError(parseError(error))
   })
 
   // Reset password mutation
@@ -73,7 +64,6 @@ const ForgetPassword = () => {
     onSuccess: () => {
       navigate('/login', { replace: true })
     },
-    onError: (error) => showError(parseError(error))
   })
 
   // Handle email submission
@@ -82,18 +72,15 @@ const ForgetPassword = () => {
     sendOTP({ email })
   }
 
-
   // Handle OTP submission
   const onOTPSubmit = ({ otp }) => {
     verifyOTP({ email, otp })
   }
 
-
   // Handle new password submission
   const onPasswordSubmit = ({ password }) => {
     resetPassword({ email, password })
   }
-
 
   // Handle resend OTP
   const handleResendOTP = () => {
@@ -103,11 +90,7 @@ const ForgetPassword = () => {
 
   const password = watch('password')
 
-  const maskedEmail = email
-    ? email.replace(/(.{2}).+(@.+)/, '$1***$2')
-    : ''
-
-
+  const maskedEmail = email ? email.replace(/(.{2}).+(@.+)/, '$1***$2') : ''
 
   return (
     <Card className='w-full'>

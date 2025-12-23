@@ -1,8 +1,8 @@
-export const getInitials = (name = "") =>
+export const getInitials = (name = '') =>
   name
-    .split(" ")
+    .split(' ')
     .filter(Boolean)
     .map((n) => n[0])
-    .join("")
+    .join('')
     .slice(0, 2)
-    .toUpperCase() || "U";
+    .toUpperCase() || 'U'

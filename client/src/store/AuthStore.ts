@@ -44,6 +44,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       userName: data.userName,
       email: data.email,
       role: data.role || 'user',
+      mfaEnabled: data.mfaEnabled || false,
+      profilePhoto: data.profilePhoto || null,
     }
 
     localStorage.setItem('user_cred', JSON.stringify(userData))

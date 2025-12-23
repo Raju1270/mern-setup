@@ -23,13 +23,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useOtpTimer } from '@/hooks/useOtpTimer'
 import {
   DeactivateAccountService,
-  DisableMFAService,
-  EnableMFAService,
   GetProfileService,
-  VerifyMFASetupService,
+  ToggleMFAService,
+  VerifyMFAToggleService,
 } from '@/services/authServices'
 import { parseError } from '@/utils/parseError'
 import { showError } from '@/utils/toast'
+import { ModeToggle } from '@/components/mode-toggle'
 
 const MFA_STEPS = {
   IDLE: 'IDLE',
@@ -47,7 +47,7 @@ const Settings = () => {
   const navigate = useNavigate()
   const [mfaStep, setMfaStep] = useState(MFA_STEPS.IDLE)
 
-  const { canResend, reset: resetTimer, start, timeLeft } = useOtpTimer(300)
+  const { canResend, reset: resetTimer, start, timeLeft } = useOtpTimer()
 
   const {
     register,
@@ -66,35 +66,24 @@ const Settings = () => {
     queryFn: GetProfileService,
   })
 
-  // ENABLE MFA.
-  const { mutate: enableMFA, isPending: isEnablingMFA } = useMutation({
-    mutationFn: EnableMFAService,
-    onSuccess: () => {
+  // TOGGLE MFA
+  const { mutate: toggleMFA, isPending: isTogglingMFA } = useMutation({
+    mutationFn: ToggleMFAService,
+    onSuccess: (data) => {
       setMfaStep(MFA_STEPS.VERIFY)
       start()
       resetForm()
     },
-    onError: (error) => showError(parseError(error)),
   })
 
-  // VERIFY MFA SETUP.
-  const { mutate: verifyMFASetup, isPending: isVerifyingMFA } = useMutation({
-    mutationFn: VerifyMFASetupService,
+  // VERIFY MFA TOGGLE.
+  const { mutate: verifyMFAToggle, isPending: isVerifyingMFA } = useMutation({
+    mutationFn: VerifyMFAToggleService,
     onSuccess: () => {
       setMfaStep(MFA_STEPS.IDLE)
       resetTimer()
       refetch()
     },
-    onError: (error) => showError(parseError(error)),
-  })
-
-  // DISABLE MFA.
-  const { mutate: disableMFA, isPending: isDisablingMFA } = useMutation({
-    mutationFn: DisableMFAService,
-    onSuccess: () => {
-      refetch()
-    },
-    onError: (error) => showError(parseError(error)),
   })
 
   // DEACTIVATE ACCOUNT.
@@ -103,17 +92,16 @@ const Settings = () => {
     onSuccess: () => {
       navigate('/login', { replace: true })
     },
-    onError: (error) => showError(parseError(error)),
   })
 
-  // HANDLE MFA ENABLE.
-  const handleEnableMFA = () => {
-    enableMFA()
+  // HANDLE MFA TOGGLE.
+  const handleToggleMFA = () => {
+    toggleMFA()
   }
 
   // HANDLE MFA VERIFY.
   const onMFAVerifySubmit = (data) => {
-    verifyMFASetup({ otp: data.otp })
+    verifyMFAToggle({ otp: data.otp })
   }
 
   // LOADING STATE.
@@ -140,24 +128,20 @@ const Settings = () => {
     <div className='container mx-auto max-w-4xl space-y-6 p-6'>
       <h1 className='text-3xl font-bold'>Settings</h1>
 
-      {/* SECURITY SETTINGS. */}
+      <ModeToggle />
+
       <Card>
         <CardHeader>
           <CardTitle className='flex items-center gap-2'>
             <Shield className='h-5 w-5' />
             Security Settings
           </CardTitle>
-          <CardDescription>Manage your account security and authentication</CardDescription>
         </CardHeader>
-        <CardContent className='space-y-6'>
-          {/* MFA SECTION. */}
+        <CardContent className=''>
           <div className='space-y-4'>
             <div className='flex items-center justify-between'>
               <div className='space-y-1'>
                 <Label className='text-base'>Two-Factor Authentication (MFA)</Label>
-                <p className='text-sm text-muted-foreground'>
-                  Add an extra layer of security to your account
-                </p>
               </div>
               <Badge variant={profile.mfaEnabled ? 'default' : 'secondary'}>
                 {profile.mfaEnabled ? 'Enabled' : 'Disabled'}
@@ -167,14 +151,14 @@ const Settings = () => {
             {mfaStep === MFA_STEPS.IDLE ? (
               <div>
                 {!profile.mfaEnabled ? (
-                  <Button onClick={handleEnableMFA} disabled={isEnablingMFA}>
-                    {isEnablingMFA ? 'Enabling...' : 'Enable MFA'}
+                  <Button onClick={handleToggleMFA} disabled={isTogglingMFA}>
+                    {isTogglingMFA ? 'Enabling...' : 'Enable MFA'}
                   </Button>
                 ) : (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant='destructive' disabled={isDisablingMFA}>
-                        {isDisablingMFA ? 'Disabling...' : 'Disable MFA'}
+                      <Button variant='destructive' disabled={isTogglingMFA}>
+                        {isTogglingMFA ? 'Processing...' : 'Disable MFA'}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -187,9 +171,7 @@ const Settings = () => {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => disableMFA()}>
-                          Disable MFA
-                        </AlertDialogAction>
+                        <AlertDialogAction onClick={handleToggleMFA}>Continue</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -200,7 +182,8 @@ const Settings = () => {
                 <div className='space-y-2'>
                   <Label>Enter Verification Code</Label>
                   <p className='text-sm text-muted-foreground'>
-                    We've sent a code to {profile.email}
+                    We've sent a code to {profile.email} to{' '}
+                    {profile.mfaEnabled ? 'disable' : 'enable'} MFA
                   </p>
                   <InputOTP
                     {...register('otp', {
@@ -223,9 +206,7 @@ const Settings = () => {
                       <InputOTPSlot index={5} />
                     </InputOTPGroup>
                   </InputOTP>
-                  {errors.otp && (
-                    <p className='text-sm text-red-500'>{errors.otp.message}</p>
-                  )}
+                  {errors.otp && <p className='text-sm text-red-500'>{errors.otp.message}</p>}
                 </div>
 
                 <div className='text-sm'>
@@ -260,7 +241,6 @@ const Settings = () => {
         </CardContent>
       </Card>
 
-      {/* DANGER ZONE. */}
       <Card className='border-destructive'>
         <CardHeader>
           <CardTitle className='flex items-center gap-2 text-destructive'>
@@ -297,6 +277,8 @@ const Settings = () => {
           </AlertDialog>
         </CardContent>
       </Card>
+
+
     </div>
   )
 }
