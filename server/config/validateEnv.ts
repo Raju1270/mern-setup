@@ -1,12 +1,22 @@
 import { z } from "zod";
+import {
+  DEFAULT_DB_NAME,
+  DEFAULT_MONGO_URI,
+  DEFAULT_PORT,
+  DEFAULT_PROFILE_CACHE_TTL,
+  DEFAULT_REDIS_URL,
+} from "./constants.js";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-  PORT: z.string().default("5000"),
-  MONGO_URI: z.string().min(1, "MONGO_URI is required"),
+  PORT: z.string().default(DEFAULT_PORT),
+  MONGO_URI: z.string().default(DEFAULT_MONGO_URI),
+  MONGO_DB_NAME: z.string().default(DEFAULT_DB_NAME),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),
   BCRYPT_ROUNDS: z.string().default("12"),
+  REDIS_URL: z.string().default(DEFAULT_REDIS_URL),
+  PROFILE_CACHE_TTL: z.string().default(DEFAULT_PROFILE_CACHE_TTL),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().optional(),
   SMTP_USER: z.string().optional(),

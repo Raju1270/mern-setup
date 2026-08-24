@@ -1,6 +1,8 @@
+import { DEFAULT_PROFILE_CACHE_TTL } from "../config/constants.js";
 import { User } from "../models/user.model.js";
 import { AppError } from "../utils/AppError.js";
 import { hashPassword, validatePasswordStrength } from "../utils/authHelpers.js";
+import { deleteCache, withCache } from "../utils/cache.js";
 import {
   clearMfaOtp,
   clearOtp,
@@ -8,6 +10,9 @@ import {
   sendOTPEmail,
   validateOtp,
 } from "../utils/otpHelper.js";
+
+const PROFILE_CACHE_TTL = Number(process.env.PROFILE_CACHE_TTL) || Number(DEFAULT_PROFILE_CACHE_TTL);
+const profileCacheKey = (userId: string) => `profile:${userId}`;
 
 export const signupUser = async (name: string, email: string, password: string) => {
   validatePasswordStrength(password);
@@ -151,6 +156,7 @@ export const verifyMFAToggle = async (userId: string, otp: string) => {
   user.mfaEnabled = newStatus;
   clearMfaOtp(user);
   await user.save();
+  await deleteCache(profileCacheKey(userId));
 
   return { success: true, mfaEnabled: newStatus };
 };
@@ -194,22 +200,23 @@ export const verifyMFACode = async (userId: string, email: string, otp: string) 
 };
 
 // PROFILE SERVICES.
-export const getUserProfile = async (userId: string) => {
-  const user = await User.findById(userId);
-  if (!user) throw new AppError("User not found", 404);
+export const getUserProfile = async (userId: string) =>
+  withCache(profileCacheKey(userId), PROFILE_CACHE_TTL, async () => {
+    const user = await User.findById(userId);
+    if (!user) throw new AppError("User not found", 404);
 
-  return {
-    userId: user._id,
-    userName: user.name,
-    email: user.email,
-    role: user.role,
-    profilePhoto: user.profilePhoto,
-    mfaEnabled: user.mfaEnabled,
-    lastLogin: user.lastLogin,
-    active: user.active,
-    createdAt: user.createdAt,
-  };
-};
+    return {
+      userId: user._id,
+      userName: user.name,
+      email: user.email,
+      role: user.role,
+      profilePhoto: user.profilePhoto,
+      mfaEnabled: user.mfaEnabled,
+      lastLogin: user.lastLogin,
+      active: user.active,
+      createdAt: user.createdAt,
+    };
+  });
 
 export const updateUserProfile = async (
   userId: string,
@@ -221,6 +228,7 @@ export const updateUserProfile = async (
   if (updates.name) user.name = updates.name;
   if (updates.profilePhoto) user.profilePhoto = updates.profilePhoto;
   await user.save();
+  await deleteCache(profileCacheKey(userId));
 
   return {
     userId: user._id,
@@ -238,6 +246,7 @@ export const deactivateAccount = async (userId: string) => {
 
   user.active = false;
   await user.save();
+  await deleteCache(profileCacheKey(userId));
 
   return { success: true };
 };

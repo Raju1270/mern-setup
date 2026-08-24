@@ -1,0 +1,72 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: ${MONGO_CONTAINER_NAME:-mongodb}
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-mern_app}
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mern_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${REDIS_CONTAINER_NAME:-redis}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - mern_network
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        PORT: ${SERVER_PORT:-5000}
+    container_name: ${SERVER_CONTAINER_NAME:-mern_server}
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    environment:
+      # OVERRIDE .env HOSTS/PORT WITH IN-NETWORK SERVICE NAMES SO THE TWO STAY IN SYNC.
+      PORT: ${SERVER_PORT:-5000}
+      MONGO_URI: mongodb://${MONGO_CONTAINER_NAME:-mongodb}:27017
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-mern_app}
+      REDIS_URL: redis://${REDIS_CONTAINER_NAME:-redis}:6379
+    ports:
+      - "${SERVER_PORT:-5000}:${SERVER_PORT:-5000}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mern_network
+
+networks:
+  mern_network:
+    name: ${NETWORK_NAME:-mern_network}
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:

@@ -25,16 +25,16 @@ export const getEmailTransporter = (): nodemailer.Transporter => {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      pool: true, // Use pooled connections for better performance
+      pool: true, // USE POOLED CONNECTIONS FOR BETTER PERFORMANCE
       maxConnections: 5,
       maxMessages: 100,
-      rateDelta: 1000, // Rate limiting: 1 second between messages
-      rateLimit: 5, // Max 5 messages per rateDelta
+      rateDelta: 1000, // RATE LIMITING: 1 SECOND between messages
+      rateLimit: 5, // MAX 5 MESSAGES PER RATEDELTA
     });
 
-    // Verify connection configuration (async, doesn't block initialization)
+    // VERIFY CONNECTION CONFIGURATION (ASYNC, DOESN'T BLOCK INITIALIZATION)
     if (!isVerified) {
-      const verifyTransporter = transporter; // Capture for closure
+      const verifyTransporter = transporter; // CAPTURE FOR CLOSURE
       verifyTransporter
         .verify()
         .then(() => {
@@ -43,7 +43,7 @@ export const getEmailTransporter = (): nodemailer.Transporter => {
         })
         .catch((error) => {
           console.error("❌ SMTP connection error:", error.message);
-          transporter = null; // Reset to retry next time
+          transporter = null; // RESET TO RETRY NEXT TIME
         });
     }
   }

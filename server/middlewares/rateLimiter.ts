@@ -1,20 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-
-interface RateLimitStore {
-  [key: string]: { count: number; resetTime: number };
-}
-
-const store: RateLimitStore = {};
-
-// CLEANUP EXPIRED ENTRIES PERIODICALLY.
-setInterval(() => {
-  const now = Date.now();
-  for (const key in store) {
-    if (store[key].resetTime < now) {
-      delete store[key];
-    }
-  }
-}, 60000);
+import { getRedisClient } from "../config/redis.js";
 
 interface RateLimitOptions {
   windowMs?: number;
@@ -23,6 +8,7 @@ interface RateLimitOptions {
   keyGenerator?: (req: Request) => string;
 }
 
+// DISTRIBUTED, REDIS-BACKED FIXED-WINDOW LIMITER. FAILS OPEN IF REDIS IS DOWN.
 export const rateLimiter = (options: RateLimitOptions = {}) => {
   const {
     windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
@@ -31,34 +17,39 @@ export const rateLimiter = (options: RateLimitOptions = {}) => {
     keyGenerator = (req) => req.ip || req.socket.remoteAddress || "unknown",
   } = options;
 
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const key = keyGenerator(req);
-    const now = Date.now();
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const key = `ratelimit:${keyGenerator(req)}`;
 
-    if (!store[key] || store[key].resetTime < now) {
-      store[key] = { count: 1, resetTime: now + windowMs };
-    } else {
-      store[key].count++;
+    try {
+      const redis = getRedisClient();
+      const count = await redis.incr(key);
+
+      if (count === 1) await redis.pexpire(key, windowMs);
+
+      const ttl = await redis.pttl(key);
+      const remaining = Math.max(0, max - count);
+      const resetTime = Math.ceil(Math.max(ttl, 0) / 1000);
+
+      res.setHeader("X-RateLimit-Limit", max);
+      res.setHeader("X-RateLimit-Remaining", remaining);
+      res.setHeader("X-RateLimit-Reset", resetTime);
+
+      if (count > max) {
+        res.setHeader("Retry-After", resetTime);
+        res.status(429).json({
+          status: "error",
+          message,
+          retryAfter: resetTime,
+        });
+        return;
+      }
+
+      next();
+    } catch (err: any) {
+      // FAIL OPEN: DON'T BLOCK TRAFFIC IF REDIS IS UNAVAILABLE.
+      console.error("✗ Rate limiter error:", err.message);
+      next();
     }
-
-    const remaining = Math.max(0, max - store[key].count);
-    const resetTime = Math.ceil((store[key].resetTime - now) / 1000);
-
-    res.setHeader("X-RateLimit-Limit", max);
-    res.setHeader("X-RateLimit-Remaining", remaining);
-    res.setHeader("X-RateLimit-Reset", resetTime);
-
-    if (store[key].count > max) {
-      res.setHeader("Retry-After", resetTime);
-      res.status(429).json({
-        status: "error",
-        message,
-        retryAfter: resetTime,
-      });
-      return;
-    }
-
-    next();
   };
 };
 

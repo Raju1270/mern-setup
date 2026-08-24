@@ -1,0 +1,6 @@
+// SINGLE SOURCE OF TRUTH FOR DEFAULT PORT/URL FALLBACKS. OVERRIDE VIA ENV.
+export const DEFAULT_PORT = "5000";
+export const DEFAULT_REDIS_URL = "redis://127.0.0.1:6379";
+export const DEFAULT_MONGO_URI = "mongodb://127.0.0.1:27017";
+export const DEFAULT_DB_NAME = "mern_app";
+export const DEFAULT_PROFILE_CACHE_TTL = "300"; // SECONDS.

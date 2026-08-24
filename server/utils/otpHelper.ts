@@ -81,10 +81,13 @@ export const sendOTPEmail = async (
     try {
       const transporter = getEmailTransporter();
 
-      const htmlContent = HtmlOtpTemplate.replace("{{.Otp}}", otp).replace(
-        "{{.FullName}}",
-        email.split("@")[0]
-      );
+      const fromName = process.env.SMTP_FROM_NAME || "Demo Application";
+      const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || "5";
+
+      const htmlContent = HtmlOtpTemplate.replace("{{.Otp}}", otp)
+        .replace("{{.FullName}}", email.split("@")[0])
+        .replace("{{.SMTP_FROM_NAME}}", fromName)
+        .replace("{{.ExpiryMinutes}}", expiryMinutes);
 
       const mailOptions = {
         from: `"${process.env.SMTP_FROM_NAME || "Demo Application"}" <${process.env.SMTP_USER}>`,
@@ -105,7 +108,7 @@ export const sendOTPEmail = async (
     }
   }
 
-  // All retries failed
+  // ALL RETRIES FAILED
   console.error("Failed to send OTP email after all retries:", lastError);
   throw new AppError("Failed to send OTP email. Please try again later.", 500);
 };
@@ -128,7 +131,7 @@ const HtmlOtpTemplate = `
             <tr>
               <td style="padding: 40px 32px; text-align: center;">
                 <h1 style="font-size: 24px; font-weight: 600; margin: 0 0 8px;">OTP Verification</h1>
-                <p style="color: #6e6e73; font-size: 14px; margin: 0;">Demo Applications</p>
+                <p style="color: #6e6e73; font-size: 14px; margin: 0;">{{.SMTP_FROM_NAME}}</p>
               </td>
             </tr>
 
@@ -145,7 +148,7 @@ const HtmlOtpTemplate = `
               <p style="font-size: 15px; margin: 0 0 24px;">Use the following One-Time Password (OTP) to complete your verification:</p>
 
               <div style="display: inline-block; padding: 16px 32px; background-color: #f2f2f7; border-radius: 8px; font-size: 24px; font-weight: bold; color: #1c1c1e; letter-spacing: 4px;">{{.Otp}}</div>
-                <p style="font-size: 14px; color: #6e6e73; margin: 24px 0 0;">This OTP is valid for the next 5 minutes.</p>
+                <p style="font-size: 14px; color: #6e6e73; margin: 24px 0 0;">This OTP is valid for the next {{.ExpiryMinutes}} minutes.</p>
             </td>
           </tr>
 

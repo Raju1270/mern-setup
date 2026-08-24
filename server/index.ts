@@ -8,6 +8,8 @@ import morgan from "morgan";
 import { connectDB } from "./config/connectDB.js";
 import { validateEnv } from "./config/validateEnv.js";
 import { closeEmailTransporter } from "./config/emailConfig.js";
+import { closeRedis, connectRedis } from "./config/redis.js";
+import { DEFAULT_PORT } from "./config/constants.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import { apiRateLimiter, authRateLimiter } from "./middlewares/rateLimiter.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -15,15 +17,11 @@ import authRoutes from "./routes/auth.routes.js";
 validateEnv();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || DEFAULT_PORT;
 const isDev = process.env.NODE_ENV === "development";
 
-// ALLOWED ORIGINS FOR CORS.
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  process.env.CLIENT_URL,
-].filter(Boolean) as string[];
+// ALLOWED ORIGINS FOR CORS. DEV MODE REFLECTS ANY ORIGIN, SO THIS ONLY GATES PRODUCTION.
+const allowedOrigins = [process.env.CLIENT_URL].filter(Boolean) as string[];
 
 app.set("trust proxy", 1);
 
@@ -81,6 +79,7 @@ const shutdown = async (signal: string): Promise<void> => {
   server.close(async () => {
     try {
       await closeEmailTransporter();
+      await closeRedis();
       await mongoose.connection.close();
 
       console.log("Server Closed");
@@ -103,6 +102,7 @@ let server: ReturnType<typeof app.listen>;
 const start = async (): Promise<void> => {
   try {
     await connectDB();
+    await connectRedis();
 
     server = app.listen(PORT, () => {
       console.log(`\n ${process.env.NODE_ENV} | Port ${PORT}\n`);
