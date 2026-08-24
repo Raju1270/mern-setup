@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { getRedisClient } from "../config/redis.js";
+import { AppError } from "../utils/AppError.js";
 
 interface RateLimitOptions {
   windowMs?: number;
@@ -24,7 +25,8 @@ export const rateLimiter = (options: RateLimitOptions = {}) => {
       const redis = getRedisClient();
       const count = await redis.incr(key);
 
-      if (count === 1) await redis.pexpire(key, windowMs);
+      // "NX" SELF-HEALS A KEY LEFT WITHOUT A TTL (E.G. A CRASH BETWEEN incr AND pexpire).
+      await redis.pexpire(key, windowMs, "NX");
 
       const ttl = await redis.pttl(key);
       const remaining = Math.max(0, max - count);
@@ -36,11 +38,7 @@ export const rateLimiter = (options: RateLimitOptions = {}) => {
 
       if (count > max) {
         res.setHeader("Retry-After", resetTime);
-        res.status(429).json({
-          status: "error",
-          message,
-          retryAfter: resetTime,
-        });
+        next(new AppError(message, 429));
         return;
       }
 

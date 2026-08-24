@@ -1,7 +1,7 @@
 import { DEFAULT_PROFILE_CACHE_TTL } from "../config/constants.js";
 import { User } from "../models/user.model.js";
 import { AppError } from "../utils/AppError.js";
-import { hashPassword, validatePasswordStrength } from "../utils/authHelpers.js";
+import { hashPassword } from "../utils/authHelpers.js";
 import { deleteCache, withCache } from "../utils/cache.js";
 import {
   clearMfaOtp,
@@ -15,8 +15,6 @@ const PROFILE_CACHE_TTL = Number(process.env.PROFILE_CACHE_TTL) || Number(DEFAUL
 const profileCacheKey = (userId: string) => `profile:${userId}`;
 
 export const signupUser = async (name: string, email: string, password: string) => {
-  validatePasswordStrength(password);
-
   const existingUser = await User.findOne({ email });
 
   // ALLOW RE-SIGNUP FOR UNVERIFIED USERS.
@@ -110,8 +108,6 @@ export const verifyUserOTP = async (email: string, otp: string) => {
 };
 
 export const resetUserPassword = async (email: string, password: string) => {
-  validatePasswordStrength(password);
-
   const user = await User.findOne({ email }).select("+otp +otpExpiry");
 
   if (!user) throw new AppError("User not found", 404);

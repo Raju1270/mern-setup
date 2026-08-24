@@ -20,21 +20,21 @@ export const getEmailTransporter = (): nodemailer.Transporter => {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
+      secure: process.env.SMTP_SECURE === "true", // TRUE FOR 465, FALSE FOR OTHER PORTS.
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      pool: true, // USE POOLED CONNECTIONS FOR BETTER PERFORMANCE
+      pool: true, // USE POOLED CONNECTIONS FOR BETTER PERFORMANCE.
       maxConnections: 5,
       maxMessages: 100,
-      rateDelta: 1000, // RATE LIMITING: 1 SECOND between messages
-      rateLimit: 5, // MAX 5 MESSAGES PER RATEDELTA
+      rateDelta: 1000, // RATE LIMITING: 1 SECOND BETWEEN MESSAGES.
+      rateLimit: 5, // MAX 5 MESSAGES PER RATEDELTA.
     });
 
-    // VERIFY CONNECTION CONFIGURATION (ASYNC, DOESN'T BLOCK INITIALIZATION)
+    // VERIFY CONNECTION CONFIGURATION (ASYNC, DOESN'T BLOCK INITIALIZATION).
     if (!isVerified) {
-      const verifyTransporter = transporter; // CAPTURE FOR CLOSURE
+      const verifyTransporter = transporter; // CAPTURE FOR CLOSURE.
       verifyTransporter
         .verify()
         .then(() => {
@@ -43,7 +43,7 @@ export const getEmailTransporter = (): nodemailer.Transporter => {
         })
         .catch((error) => {
           console.error("❌ SMTP connection error:", error.message);
-          transporter = null; // RESET TO RETRY NEXT TIME
+          transporter = null; // RESET TO RETRY NEXT TIME.
         });
     }
   }

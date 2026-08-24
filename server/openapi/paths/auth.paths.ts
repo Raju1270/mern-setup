@@ -52,7 +52,7 @@ export const authPaths = {
             "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } },
           },
         },
-        "400": errorResponse("Invalid or expired OTP"),
+        "400": errorResponse("Validation error, or invalid/expired OTP"),
       },
     },
   },
@@ -74,6 +74,7 @@ export const authPaths = {
             "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } },
           },
         },
+        "400": errorResponse("Validation error"),
         "401": errorResponse("Invalid credentials"),
         "403": errorResponse("Email unverified or account deactivated"),
       },
@@ -93,6 +94,7 @@ export const authPaths = {
       },
       responses: {
         "200": { description: "OTP sent to email" },
+        "400": errorResponse("Validation error"),
         "404": errorResponse("No account with that email"),
       },
     },
@@ -109,7 +111,7 @@ export const authPaths = {
       },
       responses: {
         "200": { description: "OTP verified" },
-        "400": errorResponse("Invalid or expired OTP"),
+        "400": errorResponse("Validation error, or invalid/expired OTP"),
       },
     },
   },
@@ -125,7 +127,7 @@ export const authPaths = {
       },
       responses: {
         "200": { description: "Password reset successfully" },
-        "400": errorResponse("Invalid request"),
+        "400": errorResponse("Validation error, or OTP not verified/expired"),
       },
     },
   },

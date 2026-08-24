@@ -1,21 +1,19 @@
 import type { NextFunction, Request, Response } from "express";
 import type { ZodType } from "zod";
+import { AppError } from "../utils/AppError.js";
 
 // ZOD VALIDATION MIDDLEWARE.
 export const validate =
   (schema: ZodType, source: "body" | "params" | "query" = "body") =>
-  (req: Request, res: Response, next: NextFunction): void => {
+  (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req[source]);
 
     if (!result.success) {
-      res.status(400).json({
-        status: "error",
-        message: "Validation failed",
-        errors: result.error.issues.map((err) => ({
-          field: err.path.join("."),
-          message: err.message,
-        })),
-      });
+      const errors = result.error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      }));
+      next(new AppError("Validation failed", 400, errors));
       return;
     }
 

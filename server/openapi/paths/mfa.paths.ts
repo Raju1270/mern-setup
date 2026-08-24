@@ -19,7 +19,7 @@ export const mfaPaths = {
             "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } },
           },
         },
-        "400": errorResponse("Invalid or expired OTP"),
+        "400": errorResponse("Validation error, or invalid/expired OTP"),
       },
     },
   },
@@ -48,7 +48,7 @@ export const mfaPaths = {
       },
       responses: {
         "200": { description: "MFA setting updated" },
-        "400": errorResponse("Invalid or expired OTP"),
+        "400": errorResponse("Validation error, or invalid/expired OTP"),
         "401": errorResponse("Not authenticated"),
       },
     },

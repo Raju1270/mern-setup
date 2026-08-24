@@ -6,7 +6,7 @@ import { schemas } from "./schemas.js";
 
 // EACH ROUTER GROUP DOCUMENTS ITS OWN PATHS IN ./paths/*.paths.ts.
 // ADD A NEW ROUTE GROUP BY CREATING A FILE THERE AND SPREADING IT INTO `paths` BELOW.
-export function buildOpenApiDocument(port: string | number = DEFAULT_PORT) {
+export const buildOpenApiDocument = (port: string | number = DEFAULT_PORT) => {
   return {
     openapi: "3.0.3",
     info: {
@@ -36,4 +36,4 @@ export function buildOpenApiDocument(port: string | number = DEFAULT_PORT) {
       ...profilePaths,
     },
   };
-}
+};
