@@ -1,3 +1,4 @@
+import { apiReference } from "@scalar/express-api-reference";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -7,6 +8,7 @@ import mongoose from "mongoose";
 import morgan from "morgan";
 import { connectDB } from "./config/connectDB.js";
 import { validateEnv } from "./config/validateEnv.js";
+import { buildOpenApiDocument } from "./openapi/index.js";
 import { closeEmailTransporter } from "./config/emailConfig.js";
 import { closeRedis, connectRedis } from "./config/redis.js";
 import { DEFAULT_PORT } from "./config/constants.js";
@@ -28,7 +30,20 @@ app.set("trust proxy", 1);
 // SECURITY MIDDLEWARES.
 app.use(
   helmet({
-    contentSecurityPolicy: isDev ? false : undefined,
+    // ALLOW THE SCALAR DOCS UI (SERVED FROM /docs) TO LOAD ITS CDN BUNDLE IN PRODUCTION.
+    contentSecurityPolicy: isDev
+      ? false
+      : {
+          directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "script-src": ["'self'", "https://cdn.jsdelivr.net"],
+            "style-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            "img-src": ["'self'", "data:", "https:"],
+            "font-src": ["'self'", "data:", "https://cdn.jsdelivr.net"],
+            "connect-src": ["'self'", "https://cdn.jsdelivr.net"],
+            "worker-src": ["'self'", "blob:"],
+          },
+        },
     crossOriginEmbedderPolicy: false,
   })
 );
@@ -68,6 +83,11 @@ const apiRouter = express.Router();
 apiRouter.use("/auth", authRateLimiter, authRoutes);
 
 app.use("/api/v1", apiRouter);
+
+// API DOCS (SCALAR).
+const openApiDocument = buildOpenApiDocument(PORT);
+app.get("/openapi.json", (req, res) => res.json(openApiDocument));
+app.use("/docs", apiReference({ url: "/openapi.json" }));
 
 app.use(notFoundHandler);
 app.use(errorHandler);
