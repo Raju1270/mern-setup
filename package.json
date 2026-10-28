@@ -3,8 +3,8 @@
 	"private": true,
 	"version": "1.0.0",
 	"scripts": {
-		"dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
-		"build": "concurrently \"pnpm --filter server build\" \"pnpm --filter client build\""
+		"dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter gateway dev\" \"pnpm --filter client dev\" \"pnpm --filter notification-service dev\" \"pnpm --filter realtime-service dev\"",
+		"build": "concurrently \"pnpm --filter server build\" \"pnpm --filter gateway build\" \"pnpm --filter client build\" \"pnpm --filter notification-service build\" \"pnpm --filter realtime-service build\""
 	},
 	"devDependencies": {
 		"concurrently": "^9.2.1"

@@ -1,0 +1,10 @@
+packages:
+  - client
+  - server
+  - notification-service
+  - realtime-service
+  - gateway
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  protobufjs: true

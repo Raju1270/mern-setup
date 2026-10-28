@@ -1,0 +1,39 @@
+# STATIC FILE, NOT ENVSUBST-TEMPLATED (SAME REASONING AS nginx/nginx.conf AND
+# mongo/init-replica-set.js) — TARGETS BELOW USE BARE COMPOSE SERVICE NAMES (server, gateway,
+# ...), WHICH ARE ALWAYS RESOLVABLE REGARDLESS OF ANY *_CONTAINER_NAME ENV VAR OVERRIDE. IF YOU
+# OVERRIDE A SERVICE'S PORT VIA ITS ENV VAR (E.G. SERVER_PORT), UPDATE THE MATCHING TARGET HERE.
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: server
+    static_configs:
+      - targets: ["server:5000"]
+    metrics_path: /metrics
+
+  # gateway RUNS AS ${GATEWAY_REPLICAS:-3} REPLICAS SHARING ONE DNS NAME — dns_sd_configs
+  # RESOLVES ALL OF THEM TO SEPARATE SCRAPE TARGETS (ONE PER REPLICA IP), THE SAME PROBLEM
+  # nginx.conf's resolver SOLVES FOR LOAD BALANCING, JUST ON THE SCRAPING SIDE: A static_configs
+  # TARGET WOULD RESOLVE "gateway" ONCE AND ONLY EVER SCRAPE WHICHEVER SINGLE REPLICA THAT
+  # HAPPENED TO RETURN, SILENTLY MISSING THE OTHER TWO.
+  - job_name: gateway
+    dns_sd_configs:
+      - names: ["gateway"]
+        type: A
+        port: 5003
+    metrics_path: /metrics
+
+  - job_name: notification-service
+    static_configs:
+      - targets: ["notification-service:5001"]
+    metrics_path: /metrics
+
+  - job_name: realtime-service
+    static_configs:
+      - targets: ["realtime-service:5002"]
+    metrics_path: /metrics

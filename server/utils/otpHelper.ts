@@ -1,7 +1,9 @@
-import nodemailer from "nodemailer";
 import type { IUser } from "../models/user.model.js";
 import { AppError } from "./AppError.js";
-import { getEmailTransporter } from "../config/emailConfig.js";
+import { getKafkaProducer } from "../config/kafka.js";
+import { logger } from "../config/logger.js";
+import { TOPIC_OTP_EMAIL } from "../config/constants.js";
+import { kafkaMessagesPublished } from "../config/metrics.js";
 
 const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -69,106 +71,23 @@ export const validateOtp = async (
   user[attemptsField] = 0;
 };
 
+// QUEUES THE OTP EMAIL FOR notification-service TO SEND — DECOUPLED FROM THE REQUEST PATH.
+// A KAFKA PUBLISH FAILURE STILL FAILS THE REQUEST: THE USER CANNOT PROCEED WITHOUT THE OTP,
+// SO SILENTLY SUCCEEDING WOULD STRAND THEM WITH NO WAY TO GET THE CODE.
 export const sendOTPEmail = async (
   email: string,
   otp: string,
   subject = "OTP Verification"
 ): Promise<void> => {
-  const maxRetries = 3;
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const transporter = getEmailTransporter();
-
-      const fromName = process.env.SMTP_FROM_NAME || "Demo Application";
-      const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || "5";
-
-      const htmlContent = HtmlOtpTemplate.replace("{{.Otp}}", otp)
-        .replace("{{.FullName}}", email.split("@")[0])
-        .replace("{{.SMTP_FROM_NAME}}", fromName)
-        .replace("{{.ExpiryMinutes}}", expiryMinutes);
-
-      const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || "Demo Application"}" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: subject,
-        html: htmlContent,
-      };
-
-      await transporter.sendMail(mailOptions);
-      return;
-    } catch (error) {
-      lastError = error as Error;
-      console.error(`Failed to send OTP email (attempt ${attempt}/${maxRetries}):`, error);
-
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-      }
-    }
+  try {
+    await getKafkaProducer().send({
+      topic: TOPIC_OTP_EMAIL,
+      messages: [{ key: email, value: JSON.stringify({ email, otp, subject }) }],
+    });
+    kafkaMessagesPublished.inc({ topic: TOPIC_OTP_EMAIL, status: "success" });
+  } catch (err) {
+    kafkaMessagesPublished.inc({ topic: TOPIC_OTP_EMAIL, status: "failure" });
+    logger.error({ err, email, subject }, "Failed to queue OTP email");
+    throw new AppError("Failed to queue OTP email. Please try again later.", 500);
   }
-
-  // ALL RETRIES FAILED
-  console.error("Failed to send OTP email after all retries:", lastError);
-  throw new AppError("Failed to send OTP email. Please try again later.", 500);
 };
-
-const HtmlOtpTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>OTP Verification</title>
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1c1c1e;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="padding: 60px 0;">
-      <tr>
-        <td align="center">
-          <table width="600" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; border: 1px solid #e5e5e5; border-radius: 12px;">
-            
-            <!-- Header -->
-            <tr>
-              <td style="padding: 40px 32px; text-align: center;">
-                <h1 style="font-size: 24px; font-weight: 600; margin: 0 0 8px;">OTP Verification</h1>
-                <p style="color: #6e6e73; font-size: 14px; margin: 0;">{{.SMTP_FROM_NAME}}</p>
-              </td>
-            </tr>
-
-            <!-- Divider -->
-            <tr>
-              <td><hr style="border: none; border-top: 1px solid #e5e5e5; margin: 0;"></td>
-            </tr>
-
-            <!-- OTP Content -->
-          <!-- OTP Content -->
-          <tr>
-            <td style="padding: 32px; text-align: center;">
-              <p style="font-size: 16px; margin: 0 0 16px;">Dear {{.FullName}},</p>
-              <p style="font-size: 15px; margin: 0 0 24px;">Use the following One-Time Password (OTP) to complete your verification:</p>
-
-              <div style="display: inline-block; padding: 16px 32px; background-color: #f2f2f7; border-radius: 8px; font-size: 24px; font-weight: bold; color: #1c1c1e; letter-spacing: 4px;">{{.Otp}}</div>
-                <p style="font-size: 14px; color: #6e6e73; margin: 24px 0 0;">This OTP is valid for the next {{.ExpiryMinutes}} minutes.</p>
-            </td>
-          </tr>
-
-
-            <!-- Divider -->
-            <tr>
-              <td><hr style="border: none; border-top: 1px solid #e5e5e5; margin: 0;"></td>
-            </tr>
-
-            <!-- Footer -->
-            <tr>
-              <td style="padding: 24px 32px; text-align: center; color: #6e6e73; font-size: 13px;">
-                <p style="margin: 4px 0;">Didn't request this code? Just ignore this email.</p>
-              </td>
-            </tr>
-
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-`;

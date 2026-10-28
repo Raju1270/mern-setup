@@ -1,0 +1,141 @@
+syntax = "proto3";
+
+package auth;
+
+// SHARED CONTRACT BETWEEN gateway (CLIENT) AND server (SERVER). LOADED DYNAMICALLY VIA
+// @grpc/proto-loader BY BOTH SIDES — NO CODEGEN STEP. FIELD NAMES ARE snake_case BY PROTO
+// CONVENTION; proto-loader's DEFAULT keepCase:false CONVERTS THEM TO camelCase IN JS/TS.
+service AuthService {
+  rpc Signup(SignupRequest) returns (SignupResponse);
+  rpc VerifySignup(VerifyOtpRequest) returns (AuthSessionResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc ForgotPassword(ForgotPasswordRequest) returns (SuccessResponse);
+  rpc VerifyOtp(VerifyOtpRequest) returns (SuccessResponse);
+  rpc ResetPassword(ResetPasswordRequest) returns (SuccessResponse);
+  rpc VerifyMfaLogin(VerifyMfaRequest) returns (AuthSessionResponse);
+  rpc ToggleMfa(UserIdRequest) returns (ToggleMfaResponse);
+  rpc VerifyMfaToggle(VerifyMfaToggleRequest) returns (MfaToggledResponse);
+  rpc GetProfile(UserIdRequest) returns (ProfileResponse);
+  rpc UpdateProfile(UpdateProfileRequest) returns (ProfileResponse);
+  rpc Deactivate(UserIdRequest) returns (SuccessResponse);
+}
+
+// ---------- REQUESTS (FIELDS MIRROR server/validators/auth.schema.ts) ----------
+
+message SignupRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  // REAL CLIENT IP, FORWARDED BY THE GATEWAY (NOT THE GATEWAY'S OWN IN-NETWORK IP) — SAME
+  // VALUE THE REST CONTROLLER USED TO READ DIRECTLY OFF req VIA getClientIp().
+  string client_ip = 3;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+message VerifyOtpRequest {
+  string email = 1;
+  string otp = 2;
+}
+
+message ResetPasswordRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message VerifyMfaRequest {
+  string user_id = 1;
+  string email = 2;
+  string otp = 3;
+  string client_ip = 4;
+}
+
+message UserIdRequest {
+  string user_id = 1;
+}
+
+message VerifyMfaToggleRequest {
+  string user_id = 1;
+  string otp = 2;
+}
+
+message UpdateProfileRequest {
+  string user_id = 1;
+  string name = 2;
+  string profile_photo = 3;
+}
+
+// ---------- RESPONSES ----------
+
+message SignupResponse {
+  bool success = 1;
+  string user_id = 2;
+  string email = 3;
+  string message = 4;
+}
+
+// COVERS VerifySignup, VerifyMfaLogin, AND Login's NON-MFA-REQUIRED CASE. proto3 FIELDS ARE
+// IMPLICITLY OPTIONAL, SO Login's mfa_required BRANCH (WHICH RETURNS FEWER FIELDS) REUSES THIS
+// SAME MESSAGE VIA LoginResponse BELOW RATHER THAN NEEDING A SEPARATE TYPE.
+message AuthSessionResponse {
+  bool success = 1;
+  string access_token = 2;
+  string user_id = 3;
+  string user_name = 4;
+  string email = 5;
+  string role = 6;
+  string profile_photo = 7;
+  bool mfa_enabled = 8;
+}
+
+// Login HAS TWO SHAPES DEPENDING ON mfa_required — ONE FLAT MESSAGE WITH ALL POSSIBLE FIELDS,
+// MATCHING THE EXISTING REST RESPONSE (WHICH DOES THE SAME THING WITH A PLAIN JS OBJECT).
+message LoginResponse {
+  bool success = 1;
+  bool mfa_required = 2;
+  string message = 3;
+  // PRESENT ONLY WHEN mfa_required IS false:
+  string access_token = 4;
+  string user_name = 5;
+  string role = 6;
+  string profile_photo = 7;
+  bool mfa_enabled = 8;
+  // ALWAYS PRESENT:
+  string user_id = 9;
+  string email = 10;
+}
+
+message SuccessResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ToggleMfaResponse {
+  bool success = 1;
+  bool current_status = 2;
+  string action = 3;
+}
+
+message MfaToggledResponse {
+  bool success = 1;
+  bool mfa_enabled = 2;
+}
+
+message ProfileResponse {
+  string user_id = 1;
+  string user_name = 2;
+  string email = 3;
+  string role = 4;
+  string profile_photo = 5;
+  bool mfa_enabled = 6;
+  string last_login = 7;
+  bool active = 8;
+  string created_at = 9;
+}

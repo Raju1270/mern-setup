@@ -1,20 +1,78 @@
 services:
-  mongodb:
+  # 3-NODE REPLICA SET (READ SCALING/HA) REPLACING THE SINGLE mongodb CONTAINER. EACH NODE IS
+  # OTHERWISE IDENTICAL; mongo-init BELOW ELECTS mongo1 PRIMARY VIA rs.initiate() ONCE ALL THREE
+  # ARE UP. member HOSTS ARE THE BARE SERVICE NAMES (mongo1/2/3) — SEE mongo/init-replica-set.js.
+  mongo1:
     image: mongo:7
-    container_name: ${MONGO_CONTAINER_NAME:-mongodb}
+    container_name: ${MONGO1_CONTAINER_NAME:-mongo1}
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-mern_app}
     volumes:
-      - mongo_data:/data/db
+      - mongo1_data:/data/db
     ports:
-      - "${MONGO_PORT:-27017}:27017"
+      - "${MONGO1_PORT:-27017}:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - mern_network
+
+  mongo2:
+    image: mongo:7
+    container_name: ${MONGO2_CONTAINER_NAME:-mongo2}
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    volumes:
+      - mongo2_data:/data/db
+    ports:
+      - "${MONGO2_PORT:-27018}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mern_network
+
+  mongo3:
+    image: mongo:7
+    container_name: ${MONGO3_CONTAINER_NAME:-mongo3}
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    volumes:
+      - mongo3_data:/data/db
+    ports:
+      - "${MONGO3_PORT:-27019}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mern_network
+
+  # ONE-SHOT: RUNS rs.initiate() AGAINST mongo1 ONCE, THEN EXITS 0. IDEMPOTENT (SKIPS IF THE
+  # REPLICA SET IS ALREADY INITIALIZED), SO IT'S SAFE ON EVERY `docker compose up`, INCLUDING
+  # RESTARTS WHERE THE mongoN VOLUMES ALREADY HOLD AN INITIALIZED SET.
+  mongo-init:
+    image: mongo:7
+    container_name: ${MONGO_INIT_CONTAINER_NAME:-mongo_init}
+    volumes:
+      - ./mongo/init-replica-set.js:/init-replica-set.js:ro
+    command: ["mongosh", "--host", "mongo1", "--port", "27017", "/init-replica-set.js"]
+    restart: "no"
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
     networks:
       - mern_network
 
@@ -36,29 +94,222 @@ services:
     networks:
       - mern_network
 
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: ${KAFKA_CONTAINER_NAME:-kafka}
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,HOST://0.0.0.0:9094
+      # PLAINTEXT IS FOR IN-NETWORK CONTAINERS (server, notification-service); HOST IS FOR
+      # CONNECTING FROM 127.0.0.1 (LOCAL pnpm dev OUTSIDE DOCKER, KAFKA CLIENT TOOLS).
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_CONTAINER_NAME:-kafka}:9092,HOST://127.0.0.1:${KAFKA_HOST_PORT:-9094}
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@${KAFKA_CONTAINER_NAME:-kafka}:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # TOPICS ARE PROVISIONED EXPLICITLY VIA THE ADMIN API AT APP STARTUP (SEE
+      # server/config/kafka.ts) RATHER THAN LEFT TO AUTO-CREATE.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "${KAFKA_HOST_PORT:-9094}:9094"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - mern_network
+
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      # ROOT CONTEXT (NOT ./server) SO THE BUILD CAN COPY THE SHARED ../proto CONTRACT gRPC
+      # NEEDS — SEE server/Dockerfile.
+      context: .
+      dockerfile: server/Dockerfile
       args:
         PORT: ${SERVER_PORT:-5000}
+        GRPC_PORT: ${SERVER_GRPC_PORT:-50051}
     container_name: ${SERVER_CONTAINER_NAME:-mern_server}
     restart: unless-stopped
     env_file:
       - ./server/.env
     environment:
       # OVERRIDE .env HOSTS/PORT WITH IN-NETWORK SERVICE NAMES SO THE TWO STAY IN SYNC.
+      # NODE_ENV MUST BE OVERRIDDEN TOO: env_file LOADS server/.env's "development", WHICH
+      # WOULD OTHERWISE BEAT THE DOCKERFILE'S ENV NODE_ENV=production (env_file OUTRANKS
+      # A DOCKERFILE ENV, environment: OUTRANKS env_file) AND TRY TO LOAD THE pino-pretty DEV
+      # DEPENDENCY THAT'S NOT IN THIS PRODUCTION IMAGE.
+      NODE_ENV: production
       PORT: ${SERVER_PORT:-5000}
-      MONGO_URI: mongodb://${MONGO_CONTAINER_NAME:-mongodb}:27017
+      GRPC_PORT: ${SERVER_GRPC_PORT:-50051}
+      # REPLICA-SET URI (SERVICE-NAME SEEDS, SAME RATIONALE AS mongo/init-replica-set.js) —
+      # directConnection IS DELIBERATELY NOT SET; THE DRIVER AUTO-DISCOVERS THE rs0 TOPOLOGY
+      # FROM THESE SEEDS. SEE server/config/connectDB.ts.
+      MONGO_URI: mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0
       MONGO_DB_NAME: ${MONGO_DB_NAME:-mern_app}
       REDIS_URL: redis://${REDIS_CONTAINER_NAME:-redis}:6379
-    ports:
-      - "${SERVER_PORT:-5000}:${SERVER_PORT:-5000}"
+      KAFKA_BROKERS: ${KAFKA_CONTAINER_NAME:-kafka}:9092
+    # NO ports: — INTERNAL-ONLY NOW. gateway IS THE SOLE PUBLIC ENTRY POINT (BOTH ITS REST API,
+    # WHICH TALKS gRPC TO server, AND ITS /docs, /openapi.json REVERSE PROXY TO server:5000).
     depends_on:
-      mongodb:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - mern_network
+
+  gateway:
+    build:
+      # ROOT CONTEXT — SAME RATIONALE AS server ABOVE (NEEDS ../proto).
+      context: .
+      dockerfile: gateway/Dockerfile
+      args:
+        PORT: ${GATEWAY_PORT:-5003}
+    # NO container_name — MUST BE UNIQUE PER CONTAINER, AND deploy.replicas RUNS SEVERAL. DOCKER
+    # AUTO-NAMES EACH REPLICA (mern-setup-gateway-1, -2, -3, ...).
+    restart: unless-stopped
+    env_file:
+      - ./gateway/.env
+    environment:
+      # SAME NODE_ENV OVERRIDE RATIONALE AS THE server SERVICE ABOVE.
+      NODE_ENV: production
+      PORT: ${GATEWAY_PORT:-5003}
+      REDIS_URL: redis://${REDIS_CONTAINER_NAME:-redis}:6379
+      GRPC_SERVER_URL: ${SERVER_CONTAINER_NAME:-mern_server}:${SERVER_GRPC_PORT:-50051}
+      DOCS_PROXY_TARGET: http://${SERVER_CONTAINER_NAME:-mern_server}:${SERVER_PORT:-5000}
+    # NO ports: — nginx IS THE PUBLIC ENTRY POINT NOW (SAME "GO INTERNAL-ONLY" MOVE AS server
+    # MADE IN PHASE 4a, ONE LAYER OUT). ALL REPLICAS SHARE THE service-name DNS ENTRY "gateway",
+    # WHICH DOCKER'S EMBEDDED DNS ROUND-ROBINS ACROSS — SEE nginx/nginx.conf's resolver USE.
+    deploy:
+      replicas: ${GATEWAY_REPLICAS:-3}
+    depends_on:
+      server:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - mern_network
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ${NGINX_CONTAINER_NAME:-mern_nginx}
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${GATEWAY_PORT:-5003}:80"
+    # START-ORDER HINT ONLY (NOT condition: service_healthy) — A REAL LOAD BALANCER SHOULD
+    # TOLERATE BACKENDS NOT BEING UP YET, NOT REQUIRE THEM SYNCHRONIZED AT ITS OWN STARTUP.
+    depends_on:
+      - gateway
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - mern_network
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+      args:
+        HEALTH_PORT: ${NOTIFICATION_HEALTH_PORT:-5001}
+    container_name: ${NOTIFICATION_CONTAINER_NAME:-mern_notification_service}
+    restart: unless-stopped
+    env_file:
+      - ./notification-service/.env
+    environment:
+      # SAME NODE_ENV OVERRIDE RATIONALE AS THE server SERVICE ABOVE.
+      NODE_ENV: production
+      HEALTH_PORT: ${NOTIFICATION_HEALTH_PORT:-5001}
+      KAFKA_BROKERS: ${KAFKA_CONTAINER_NAME:-kafka}:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - mern_network
+
+  realtime-service:
+    build:
+      context: ./realtime-service
+      dockerfile: Dockerfile
+      args:
+        PORT: ${REALTIME_PORT:-5002}
+    container_name: ${REALTIME_CONTAINER_NAME:-mern_realtime_service}
+    restart: unless-stopped
+    env_file:
+      - ./realtime-service/.env
+    environment:
+      # SAME NODE_ENV OVERRIDE RATIONALE AS THE server SERVICE ABOVE.
+      NODE_ENV: production
+      PORT: ${REALTIME_PORT:-5002}
+      KAFKA_BROKERS: ${KAFKA_CONTAINER_NAME:-kafka}:9092
+    ports:
+      - "${REALTIME_PORT:-5002}:${REALTIME_PORT:-5002}"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - mern_network
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: ${PROMETHEUS_CONTAINER_NAME:-mern_prometheus}
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mern_network
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    container_name: ${GRAFANA_CONTAINER_NAME:-mern_grafana}
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      # PROVISIONING (DATASOURCE + DASHBOARD PROVIDER CONFIG) AND THE DASHBOARD JSON ITSELF ARE
+      # READ-ONLY REPO FILES; grafana_data IS THE ONLY WRITABLE VOLUME, HOLDING GRAFANA'S OWN
+      # SQLITE DB (USERS, SESSIONS, ANY UI-EDITED DASHBOARD STATE) SO IT SURVIVES RESTARTS.
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3003}:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - mern_network
 
@@ -68,5 +319,10 @@ networks:
     driver: bridge
 
 volumes:
-  mongo_data:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
+  kafka_data:

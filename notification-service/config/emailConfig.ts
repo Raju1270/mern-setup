@@ -1,0 +1,65 @@
+import nodemailer from "nodemailer";
+import { logger } from "./logger.js";
+
+let transporter: nodemailer.Transporter | null = null;
+let isVerified = false;
+
+export const validateEmailConfig = (): void => {
+  const requiredVars = ["SMTP_USER", "SMTP_PASS"];
+  const missing = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required email configuration: ${missing.join(", ")}`);
+  }
+};
+
+export const getEmailTransporter = (): nodemailer.Transporter => {
+  if (!transporter) {
+    validateEmailConfig();
+
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === "true", // TRUE FOR 465, FALSE FOR OTHER PORTS.
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      pool: true, // USE POOLED CONNECTIONS FOR BETTER PERFORMANCE.
+      maxConnections: 5,
+      maxMessages: 100,
+      rateDelta: 1000, // RATE LIMITING: 1 SECOND BETWEEN MESSAGES.
+      rateLimit: 5, // MAX 5 MESSAGES PER RATEDELTA.
+    });
+
+    // VERIFY CONNECTION CONFIGURATION (ASYNC, DOESN'T BLOCK INITIALIZATION).
+    if (!isVerified) {
+      const verifyTransporter = transporter; // CAPTURE FOR CLOSURE.
+      verifyTransporter
+        .verify()
+        .then(() => {
+          isVerified = true;
+          logger.info("✅ SMTP server is ready to send emails");
+        })
+        .catch((error) => {
+          logger.error({ err: error }, "❌ SMTP connection error");
+          transporter = null; // RESET TO RETRY NEXT TIME.
+        });
+    }
+  }
+
+  if (!transporter) {
+    throw new Error("Email transporter is not initialized");
+  }
+
+  return transporter;
+};
+
+export const closeEmailTransporter = async (): Promise<void> => {
+  if (transporter) {
+    transporter.close();
+    transporter = null;
+    isVerified = false;
+    logger.info("Email transporter closed");
+  }
+};

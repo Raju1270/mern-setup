@@ -1,4 +1,5 @@
 import { getRedisClient } from "../config/redis.js";
+import { logger } from "../config/logger.js";
 
 // BEST-EFFORT CACHE: ANY REDIS ERROR IS LOGGED AND SWALLOWED, NEVER FAILS THE CALLER.
 export const getCache = async <T>(key: string): Promise<T | null> => {
@@ -7,7 +8,7 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
   try {
     raw = await getRedisClient().get(key);
   } catch (err: any) {
-    console.error(`✗ Cache read failed [${key}]:`, err.message);
+    logger.error({ err, key }, "✗ Cache read failed");
     return null;
   }
 
@@ -17,7 +18,7 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
     return JSON.parse(raw) as T;
   } catch (err: any) {
     // CORRUPTED ENTRY — EVICT IT SO IT DOESN'T KEEP FAILING UNTIL TTL EXPIRY.
-    console.error(`✗ Cache entry corrupted [${key}], evicting:`, err.message);
+    logger.error({ err, key }, "✗ Cache entry corrupted, evicting");
     await deleteCache(key);
     return null;
   }
@@ -30,14 +31,14 @@ export const setCache = async (key: string, value: unknown, ttlSeconds: number):
     serialized = JSON.stringify(value);
   } catch (err: any) {
     // NON-SERIALIZABLE VALUE — A CALLER BUG, NOT A REDIS FAILURE.
-    console.error(`✗ Cache serialization failed [${key}]:`, err.message);
+    logger.error({ err, key }, "✗ Cache serialization failed");
     return;
   }
 
   try {
     await getRedisClient().set(key, serialized, "EX", ttlSeconds);
   } catch (err: any) {
-    console.error(`✗ Cache write failed [${key}]:`, err.message);
+    logger.error({ err, key }, "✗ Cache write failed");
   }
 };
 
@@ -47,17 +48,21 @@ export const deleteCache = async (...keys: string[]): Promise<void> => {
   try {
     await getRedisClient().del(...keys);
   } catch (err: any) {
-    console.error(`✗ Cache delete failed [${keys.join(", ")}]:`, err.message);
+    logger.error({ err, keys }, "✗ Cache delete failed");
   }
 };
 
 // RETURNS THE CACHED VALUE IF PRESENT, OTHERWISE RUNS fetcher, CACHES, AND RETURNS THE RESULT.
-// fetcher ERRORS PROPAGATE NORMALLY AND ARE NEVER CACHED.
+// fetcher ERRORS PROPAGATE NORMALLY AND ARE NEVER CACHED. ttlSeconds <= 0 DISABLES CACHING
+// ENTIRELY (ALWAYS CALLS fetcher) RATHER THAN PASSING A NON-POSITIVE EXPIRY TO REDIS, WHICH
+// setCache's "EX" OPTION WOULD REJECT WITH "ERR invalid expire time".
 export const withCache = async <T>(
   key: string,
   ttlSeconds: number,
   fetcher: () => Promise<T>
 ): Promise<T> => {
+  if (ttlSeconds <= 0) return fetcher();
+
   const cached = await getCache<T>(key);
   if (cached !== null) return cached;
 

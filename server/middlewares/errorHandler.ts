@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { logger } from "../config/logger.js";
 import { AppError, type FieldError } from "../utils/AppError.js";
 
 interface MongooseError extends Error {
@@ -7,6 +8,7 @@ interface MongooseError extends Error {
   code?: number;
   keyPattern?: any;
   path?: string;
+  type?: string;
 }
 
 // SAME "fail" (4xx, CLIENT'S FAULT) / "error" (5xx, SERVER'S FAULT) CONVENTION AS AppError,
@@ -31,6 +33,12 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
+  // MALFORMED JSON BODY (express.json() THROWS AN http-errors 400, NOT AN AppError).
+  if (err.type === "entity.parse.failed") {
+    respond(res, 400, "Malformed JSON in request body");
+    return;
+  }
+
   // MONGOOSE VALIDATION.
   if (err.name === "ValidationError") {
     respond(
@@ -68,6 +76,6 @@ export const errorHandler = (
   }
 
   // UNKNOWN ERRORS.
-  console.error("✗ Error:", err);
+  logger.error({ err }, "✗ Unhandled error");
   respond(res, 500, process.env.NODE_ENV === "development" ? err.message : "Something went wrong");
 };

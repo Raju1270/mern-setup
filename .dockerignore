@@ -1,0 +1,28 @@
+# USED BY server/Dockerfile AND gateway/Dockerfile — BOTH BUILD FROM THE REPO ROOT CONTEXT
+# (THEY NEED ../proto, WHICH LIVES OUTSIDE THEIR OWN DIRECTORY). notification-service AND
+# realtime-service STILL BUILD FROM THEIR OWN DIRECTORIES AND USE THEIR OWN .dockerignore.
+**/node_modules
+**/dist
+**/npm-debug.log*
+**/pnpm-debug.log*
+
+**/.env
+**/.env.local
+**/.env.*.local
+
+.git
+.gitignore
+**/.fallow
+**/.vscode
+**/.idea
+
+**/coverage
+**/.nyc_output
+
+**/*.md
+**/Dockerfile
+**/.dockerignore
+
+client
+notification-service
+realtime-service

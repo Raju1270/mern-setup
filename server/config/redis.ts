@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import { DEFAULT_REDIS_URL } from "./constants.js";
+import { logger } from "./logger.js";
 
 let client: Redis | null = null;
 
@@ -15,12 +16,12 @@ export const connectRedis = async (): Promise<void> => {
       client!.once("error", reject);
     });
 
-    console.log("✓ Redis connected");
+    logger.info("✓ Redis connected");
 
-    client.on("error", (err) => console.error("✗ Redis error:", err.message));
-    client.on("reconnecting", () => console.warn("⚠ Redis reconnecting..."));
+    client.on("error", (err) => logger.error({ err }, "✗ Redis error"));
+    client.on("reconnecting", () => logger.warn("⚠ Redis reconnecting..."));
   } catch (err: any) {
-    console.error("✗ Redis connection failed:", err.message);
+    logger.error({ err }, "✗ Redis connection failed");
     process.exit(1);
   }
 };
@@ -35,6 +36,6 @@ export const closeRedis = async (): Promise<void> => {
   if (client) {
     await client.quit();
     client = null;
-    console.log("Redis connection closed");
+    logger.info("Redis connection closed");
   }
 };

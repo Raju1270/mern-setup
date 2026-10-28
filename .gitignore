@@ -58,6 +58,3 @@ Thumbs.db
 *.temp
 .temp/
 .tmp/
-.agents
-.claude
-.fallow

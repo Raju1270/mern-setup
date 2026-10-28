@@ -3,21 +3,20 @@ import type { AuthRequest } from "../middlewares/auth.js";
 import {
   deactivateAccount,
   getUserProfile,
-  loginUser,
+  performLogin,
+  performMfaLoginVerification,
   resetUserPassword,
-  sendMFACode,
   sendPasswordResetOTP,
   signupUser,
   toggleMFARequest,
   updateUserProfile,
-  verifyMFACode,
   verifyMFAToggle,
   verifySignupOTP,
   verifyUserOTP,
 } from "../services/auth.service.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { comparePassword, generateToken, getClientIp } from "../utils/authHelpers.js";
+import { generateToken, getClientIp } from "../utils/authHelpers.js";
 
 export const signup = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -60,58 +59,28 @@ export const login = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const { email, password } = req.body;
 
-    // FIND USER.
+    const result = await performLogin(email, password, getClientIp(req));
 
-    const user = await loginUser(email);
-
-    if (!user) {
-      return next(new AppError("No user found ", 401));
-    }
-
-    if (!user.emailVerified) {
-      return next(new AppError("Please verify your email before logging in.", 403));
-    }
-
-    if (!user.active) {
-      return next(new AppError("Account is deactivated. Please contact support.", 403));
-    }
-
-    const isPasswordValid = await comparePassword(password, user.password);
-    if (!isPasswordValid) {
-      return next(new AppError("Invalid email or password", 401));
-    }
-
-    // CHECK IF MFA IS ENABLED
-    if (user.mfaEnabled) {
-      // Send MFA code
-      await sendMFACode(user._id.toString(), user.email);
-
+    if (result.mfaRequired) {
       res.json({
         success: true,
         mfaRequired: true,
-        userId: user._id,
-        email: user.email,
+        userId: result.userId,
+        email: result.email,
         message: "MFA code sent to your email",
       });
       return;
     }
 
-    // UPDATE LOGIN TRACKING.
-    user.lastLogin = new Date();
-    user.loginIp = getClientIp(req);
-    await user.save();
-
-    const accessToken = generateToken(user._id.toString(), user.role);
-
     res.json({
       success: true,
-      accessToken,
-      userId: user._id,
-      userName: user.name,
-      email: user.email,
-      role: user.role,
-      profilePhoto: user.profilePhoto,
-      mfaEnabled: user.mfaEnabled,
+      accessToken: result.accessToken,
+      userId: result.userId,
+      userName: result.userName,
+      email: result.email,
+      role: result.role,
+      profilePhoto: result.profilePhoto,
+      mfaEnabled: result.mfaEnabled,
     });
   }
 );
@@ -188,22 +157,17 @@ export const verifyMFALogin = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     const { userId, email, otp } = req.body;
 
-    const result = await verifyMFACode(userId, email, otp);
-
-    result.user.loginIp = getClientIp(req);
-    await result.user.save();
-
-    const accessToken = generateToken(result.user._id.toString(), result.user.role);
+    const result = await performMfaLoginVerification(userId, email, otp, getClientIp(req));
 
     res.json({
       success: true,
-      accessToken,
-      userId: result.user._id,
-      userName: result.user.name,
-      email: result.user.email,
-      role: result.user.role,
-      profilePhoto: result.user.profilePhoto,
-      mfaEnabled: result.user.mfaEnabled,
+      accessToken: result.accessToken,
+      userId: result.userId,
+      userName: result.userName,
+      email: result.email,
+      role: result.role,
+      profilePhoto: result.profilePhoto,
+      mfaEnabled: result.mfaEnabled,
     });
   }
 );

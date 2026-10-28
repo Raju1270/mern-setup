@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"cdn bundle status=%{http_code}\\\\n\" https://cdn.jsdelivr.net/npm/@scalar/api-reference)",
+      "Bash(curl -sL -o /dev/null -w \"final status=%{http_code}\\\\n\" https://cdn.jsdelivr.net/npm/@scalar/api-reference)",
+      "Bash(rm -f /tmp/server_grpc_test.log)",
+      "Bash(pnpm dev *)",
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/signup -H 'Content-Type: application/json' -d '{\"name\":\"Grpc Refactor Test\",\"email\":\"grpc-refactor-test@example.com\",\"password\":\"Str0ng!Pass\"}' -w '\\\\nstatus=%{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/verify-signup -H 'Content-Type: application/json' -d '{\"email\":\"grpc-refactor-test@example.com\",\"otp\":\"287526\"}' -w '\\\\nstatus=%{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://localhost:5000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"grpc-refactor-test@example.com\",\"password\":\"Str0ng!Pass\"}' -w '\\\\nstatus=%{http_code}\\\\n')"
+    ]
+  }
+}

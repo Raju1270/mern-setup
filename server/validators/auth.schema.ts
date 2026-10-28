@@ -38,9 +38,11 @@ export const resetPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+// SEE gateway/validators/auth.schema.ts's verifyMFASchema FOR WHY userId/email ARE REQUIRED,
+// NOT .optional() — SAME RATIONALE APPLIES TO THIS COPY.
 export const verifyMFASchema = z.object({
-  userId: z.string().optional(),
-  email: z.string().email("Invalid email format").toLowerCase().trim().optional(),
+  userId: z.string().min(1, "userId is required"),
+  email: z.string().email("Invalid email format").toLowerCase().trim(),
   otp: z
     .string()
     .length(6, "OTP must be 6 digits")
